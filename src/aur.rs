@@ -1,5 +1,11 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::fs::OpenOptions;
+use std::os::unix::fs::OpenOptionsExt;
+use std::error::Error;
+use std::fs::File;
+use std::io::prelude::*;
 
 use serde::Deserialize;
 extern crate serde_json;
@@ -11,7 +17,7 @@ extern crate serde;
 const PACMAN_BIN: &str = "/usr/bin/pacman";
 const MAKEPKG_BIN: &str = "/usr/bin/makepkg";
 const TAR_BIN: &str = "/usr/bin/tar";
-const RAY_TMP: &str = "/tmp/raytmp";
+const RAY_TMP: &str = "/tmp/raytmp/";
 const BASE_URL: &str = "https://aur.archlinux.org";
 
 
@@ -85,7 +91,6 @@ pub struct PackageData {
     pub url_path: Option<String>,
 }
 
-#[tokio::main]
 pub async fn search_aur(package: String) -> Result<Vec<PackageData>, Box<dyn std::error::Error>> {
     let mut url: String = "https://aur.archlinux.org/rpc/?v=5&type=search&arg=".to_owned();
     let package = package.to_owned();
@@ -109,18 +114,28 @@ pub async fn search_aur(package: String) -> Result<Vec<PackageData>, Box<dyn std
     // Ok(package)
 }
 
-pub async fn download_file(filepath: String, url: String) -> std::io::Result<()> {
+
+pub async fn download_file(filepath: String, url: String) -> Result<(), Box<dyn Error>> {
     // create file
     // create_directory(filepath);
     // Get data
     
-    // Write data to file
-
+    let mut file = match File::create(&filepath) {
+        Err(why) => {
+            panic!("Could not create file {}", why);
+        },
+        Ok(file) => file,
+    };
+    dbg!(&url);
+    let response = reqwest::get(url).await?;
+    let content = response.bytes().await?;
+    
+    file.write_all(&content[..])?;
     Ok(())
 
 }
 
-pub async fn install(package_data: PackageData) {
+pub async fn install(package_data: &PackageData) -> Result<(), Box<dyn Error>>{
     // DONE: creat folder with 0755 permission
     // check for errors
 
@@ -136,40 +151,51 @@ pub async fn install(package_data: PackageData) {
     // Check for dependencies
 
     // makepkg -sri
-    
+
+
     let build_dir = concat_string!(RAY_TMP, "builds");
 
-    match create_directory(build_dir) {
+    dbg!(&build_dir);
+    match create_directory(&build_dir) {
         Ok(()) => {
 
         },
         Err(_) => {
             dbg!("Error creating file");
+            panic!();
         }
     }
 
-    let package_name = package_data.name.unwrap();
-    let tar_location = format!("{}{}{}", RAY_TMP, package_name, ".tar.gz");
+    //let package_name = package_data.name.unwrap();
+    let package_name = package_data.name.as_ref().unwrap();
+    let tar_location = concat_string!(build_dir, "/", package_name, ".tar.gz");
 
-    let package_url = package_data.url.unwrap();
-    let download_url = format!("{}{}", BASE_URL, package_url);
-
-    download_file(tar_location, download_url);
+    let package_url = package_data.url_path.as_ref().unwrap();
+    let download_url = concat_string!(BASE_URL,  package_url);
+    //let download_url = "";
+    match download_file(tar_location, download_url).await {
+        Ok(_) => Ok(()),
+        Err(why) => {
+            println!("Error Downloading {}", &why);
+            panic!();
+        }
+    }
    
 
 }
 
-fn create_directory(filepath: String) ->std::io::Result<()>{
+fn create_directory(filepath: &String) ->std::io::Result<()>{
 
+    dbg!(&filepath);
     if fs::metadata(&filepath).is_ok() {
         Ok(())
     }
     else {
-        let directory = fs::File::create(filepath)?;
-        let metadata  = directory.metadata()?;
-        let mut permissions = metadata.permissions();
+        let path = Path::new(filepath.as_str());
 
-        permissions.set_mode(0o755);
+        fs::create_dir_all(path).expect("Could not create file");
+        let permissions = fs::Permissions::from_mode(0o755);
+        fs::set_permissions(path, permissions)?;
         Ok(())
     }
 

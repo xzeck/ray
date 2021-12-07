@@ -9,8 +9,8 @@ use std::env;
 #[macro_use(concat_string)]
 extern crate concat_string;
 
-
-fn main() {
+#[tokio::main]
+async fn main() {
     print!("Enter package name >> ");
     io::stdout().flush().unwrap();
 
@@ -24,7 +24,7 @@ fn main() {
         .parse()
         .expect("Cannot parse the package name");
 
-    let package_data = match aur::search_aur(package) {
+    let package_data = match aur::search_aur(package).await {
         Ok(data) => data,
         Err(_) => Vec::new(),
     };
@@ -32,7 +32,8 @@ fn main() {
     // args::arg_parser();
 
     println!();
-    print_package_data(&package_data);
+    //print_package_data(&package_data);
+    aur::install(&package_data[0]).await;
 
 }
 
