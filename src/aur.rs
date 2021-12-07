@@ -1,8 +1,6 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::fs::OpenOptions;
-use std::os::unix::fs::OpenOptionsExt;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -36,7 +34,7 @@ struct AurResponse {
 }
 
 // Required data structure
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct PackageData {
 
     #[serde(rename(deserialize = "ID"))]
@@ -91,6 +89,7 @@ pub struct PackageData {
     pub url_path: Option<String>,
 }
 
+
 pub async fn search_aur(package: String) -> Result<Vec<PackageData>, Box<dyn std::error::Error>> {
     let mut url: String = "https://aur.archlinux.org/rpc/?v=5&type=search&arg=".to_owned();
     let package = package.to_owned();
@@ -126,7 +125,7 @@ pub async fn download_file(filepath: String, url: String) -> Result<(), Box<dyn 
         },
         Ok(file) => file,
     };
-    dbg!(&url);
+
     let response = reqwest::get(url).await?;
     let content = response.bytes().await?;
     
@@ -135,15 +134,15 @@ pub async fn download_file(filepath: String, url: String) -> Result<(), Box<dyn 
 
 }
 
-pub async fn install(package_data: &PackageData) -> Result<(), Box<dyn Error>>{
+pub async fn install(packages_to_install: Vec<PackageData>) -> Result<(), Box<dyn Error>>{
     // DONE: creat folder with 0755 permission
-    // check for errors
+    // DONE: check for errors
 
-    // generate tar location
-    // let tar_location: String = build_dir + package_data.name + ".tar.gz";
+    // DONE: generate tar location
+    // DONE: let tar_location: String = build_dir + package_data.name + ".tar.gz";
     
-    // call download_file and pass tar_location and path
-    // check errors
+    // DONE: call download_file and pass tar_location and path
+    // DONE: check errors
 
     // execute tar -xf <tar_location> -C <build_dir>
     // check errors
@@ -155,7 +154,8 @@ pub async fn install(package_data: &PackageData) -> Result<(), Box<dyn Error>>{
 
     let build_dir = concat_string!(RAY_TMP, "builds");
 
-    dbg!(&build_dir);
+    // Create build directory
+    // /tmp/raytmp/builds
     match create_directory(&build_dir) {
         Ok(()) => {
 
@@ -166,27 +166,54 @@ pub async fn install(package_data: &PackageData) -> Result<(), Box<dyn Error>>{
         }
     }
 
-    //let package_name = package_data.name.unwrap();
-    let package_name = package_data.name.as_ref().unwrap();
-    let tar_location = concat_string!(build_dir, "/", package_name, ".tar.gz");
+    for package_data in packages_to_install {
 
-    let package_url = package_data.url_path.as_ref().unwrap();
-    let download_url = concat_string!(BASE_URL,  package_url);
-    //let download_url = "";
-    match download_file(tar_location, download_url).await {
-        Ok(_) => Ok(()),
-        Err(why) => {
-            println!("Error Downloading {}", &why);
-            panic!();
+        // Get name of the package
+        let package_name = package_data.name.as_ref().unwrap();
+        
+        // Where package data will be downloaded
+        // /tmp/raytmp/builds/<package-name>/
+        let tar_location = concat_string!(build_dir, "/", package_name);
+        // name of tar
+        // /tmp/raytmp/builds/<package-name>/<package-name.tar.gz>
+        let tar_name_path = concat_string!(tar_location, "/", package_name, ".tar.gz");
+        
+        // get the AUR url
+        let package_url = package_data.url_path.as_ref().unwrap();
+        
+        // generate full URL
+        let download_url = concat_string!(BASE_URL,  package_url);
+        
+        // Create download directory
+        match create_directory(&tar_location) {
+            Ok(()) => {},
+            Err(why) => {
+                println!("Error while creating file");
+                println!("Reason:");
+                println!("{}", why);
+                panic!();
+            }
+        }
+        
+        // Download file
+        match download_file(tar_name_path, download_url).await {
+            Ok(_) => {
+                println!("{} - Downloaded", package_data.name.unwrap());
+                continue;
+            },
+            Err(why) => {
+                println!("Error Downloading {}", &why);
+                panic!();
+            }
         }
     }
    
+    Ok(())
 
 }
 
 fn create_directory(filepath: &String) ->std::io::Result<()>{
 
-    dbg!(&filepath);
     if fs::metadata(&filepath).is_ok() {
         Ok(())
     }
