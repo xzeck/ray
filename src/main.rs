@@ -32,11 +32,16 @@ async fn main() {
 
     println!();
     print_package_data(&package_data);
-    
+
     let packages_to_install = get_package_index(package_data);
 
-    aur::install(packages_to_install).await;
-
+    match aur::install(packages_to_install).await {
+        Ok(_) => {},
+        Err(why) => {
+            println!("Error");
+            println!("{}", why);
+        }
+    }
 }
 
 fn print_package_data(package_data: &Vec<aur::PackageData>) {
@@ -80,6 +85,7 @@ fn print_package_data(package_data: &Vec<aur::PackageData>) {
 
 fn get_package_index(package_data: Vec<aur::PackageData>) -> Vec<aur::PackageData> {
 
+    println!();
     println!("Enter packages to install with space");
 
     let mut packages = String::new();
@@ -94,8 +100,11 @@ fn get_package_index(package_data: Vec<aur::PackageData>) -> Vec<aur::PackageDat
 
     let mut packages_to_install: Vec<aur::PackageData> = Vec::new();
     for i in package_indexes {
-        let package = &package_data[i as usize];
-        packages_to_install.push(package.clone());
+        let idx = i as usize;
+        if idx < package_data.len(){
+            let package = &package_data[idx];
+            packages_to_install.push(package.clone());
+        }
     }
 
     packages_to_install
