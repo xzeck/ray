@@ -204,17 +204,7 @@ pub async fn install(packages_to_install: Vec<PackageData>) -> Result<(), Box<dy
         
         // generate full URL
         let download_url = concat_string!(BASE_URL,  package_url);
-        
-        // Create download directory
-        // match create_directory(&tar_location) {
-        //     Ok(()) => {},
-        //     Err(why) => {
-        //         println!("Error while creating file");
-        //         println!("Reason:");
-        //         println!("{}", why);
-        //         panic!();
-        //     }
-        // }
+
         
         // Download file
         match download_file(&tar_name_path, download_url).await {
@@ -229,6 +219,7 @@ pub async fn install(packages_to_install: Vec<PackageData>) -> Result<(), Box<dy
             }
         }
 
+        fs::remove_file(tar_name_path);
 
     }
    
