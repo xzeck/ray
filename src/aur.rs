@@ -95,6 +95,7 @@ pub struct PackageData {
     pub url_path: Option<String>,
 }
 
+// Search in AUR
 pub async fn search_aur(package: String) -> Result<Vec<PackageData>, Box<dyn std::error::Error>> {
     let mut url: String = "https://aur.archlinux.org/rpc/?v=5&type=search&arg=".to_owned();
     let package = package.to_owned();
@@ -114,7 +115,7 @@ pub async fn search_aur(package: String) -> Result<Vec<PackageData>, Box<dyn std
     Ok(package_data)
 }
 
-
+// Downloads the tar file and saves it to tmp
 pub async fn download_file(filepath: &Path, url: String) -> Result<(), Box<dyn Error>> {
     // create file
     // create_directory(filepath);
@@ -135,13 +136,14 @@ pub async fn download_file(filepath: &Path, url: String) -> Result<(), Box<dyn E
 
 }
 
+// Write data to stdout
 pub async fn write_to_stdout(process:  &mut Child) {
-    let stdout = process.stdout.as_mut().unwrap();
+    let stdout = process.stdout..as_mut().unwrap();
     let stdout_reader = BufReader::new(stdout);
     let stdout_lines = stdout_reader.lines();
 
     for line in stdout_lines {
-        println!("{:?}", line);
+        println!("{}", line.unwrap());
     }
 }
 
@@ -177,7 +179,9 @@ pub async fn wait_till_file_created(file_path: &Path) -> Result<(), Box<dyn Erro
     }
 
 }
-pub async fn unpack_file(tar_location: &Path, unpack_location: &Path) -> Result<(), Box<dyn Error>>{
+
+// Unpack file and install
+pub async fn unpack_file_and_install(tar_location: &Path, unpack_location: &Path) -> Result<(), Box<dyn Error>>{
     // Unpack file
 
     let mut tar_command = match Command::new("tar")
@@ -187,8 +191,8 @@ pub async fn unpack_file(tar_location: &Path, unpack_location: &Path) -> Result<
                                         .stdout(Stdio::piped())
                                         .spawn()
     {
-        Ok(Child) => {
-            Child
+        Ok(child) => {
+            child
         },
         Err(why) => {
             println!("Error while spawning tar process");
@@ -213,8 +217,8 @@ pub async fn unpack_file(tar_location: &Path, unpack_location: &Path) -> Result<
                                             .stdout(Stdio::piped())
                                             .spawn()
     {
-        Ok(Child) => {
-            Child
+        Ok(child) => {
+            child
         },
         Err(why) => {
             println!("Error while spawning makepkg process");
@@ -273,7 +277,7 @@ pub async fn install(packages_to_install: Vec<PackageData>) -> Result<(), Box<dy
         match download_file(&tar_name_path, download_url).await {
             Ok(_) => {
                 println!("{}-{} - Downloaded", package_data.name.unwrap().bright_green(), package_data.version.unwrap().bright_cyan());
-                unpack_file(&tar_name_path, &unpack_location).await;
+                unpack_file_and_install(&tar_name_path, &unpack_location).await;
             },
             Err(why) => {
                 println!("Error Downloading - {} - Error", package_data.name.unwrap().bright_red());
