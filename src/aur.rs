@@ -1,6 +1,6 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -9,6 +9,10 @@ use std::process::{Child, Command, Stdio};
 use colored::*;
 
 use serde::Deserialize;
+use std::sync::mpsc;
+use std::time::Duration;
+use notify::{Watcher, RecursiveMode, RecommendedWatcher, recommended_watcher};
+
 extern crate serde_json;
 extern crate serde;
 
@@ -111,7 +115,7 @@ pub async fn search_aur(package: String) -> Result<Vec<PackageData>, Box<dyn std
 }
 
 
-pub async fn download_file(filepath: &String, url: String) -> Result<(), Box<dyn Error>> {
+pub async fn download_file(filepath: &Path, url: String) -> Result<(), Box<dyn Error>> {
     // create file
     // create_directory(filepath);
     // Get data
@@ -140,7 +144,40 @@ pub async fn write_to_stdout(process:  &mut Child) {
         println!("{:?}", line);
     }
 }
-pub async fn unpack_file(tar_location: &String, unpack_location: &String) -> Result<(), Box<dyn Error>>{
+
+// Wait till file is created
+pub async fn wait_till_file_created(file_path: &Path) -> Result<(), Box<dyn Error>> {
+    // get mpsc channel
+    let (sender, receiver) = mpsc::channel();
+
+    // Create new watcher with sender as the handler
+    let mut watcher = recommended_watcher(sender)?;
+
+    // Get parent directory
+    let file_dir = file_path.parent().unwrap();
+
+    // Watch for any changes in the directory
+    watcher.watch(file_dir, RecursiveMode::Recursive).unwrap();
+
+    // loop till timeout
+    loop {
+        // Receive for 2 seconds
+        match receiver.recv_timeout(Duration::from_secs(2)) {
+            Ok(event) => {
+                // Unwatch and return Ok
+                watcher.unwatch(file_dir)?;
+                Ok(())
+            },
+            Err(why) => {
+                println!("Cannot watch for event");
+                println!("{}", why);
+                panic!();
+            }
+        }
+    }
+
+}
+pub async fn unpack_file(tar_location: &Path, unpack_location: &Path) -> Result<(), Box<dyn Error>>{
     // Unpack file
 
     let mut tar_command = match Command::new("tar")
@@ -159,6 +196,15 @@ pub async fn unpack_file(tar_location: &String, unpack_location: &String) -> Res
             panic!();
         }
     };
+
+    match wait_till_file_created(unpack_location).await {
+        Ok(_) => {},
+        Err(why) => {
+            println!("Error creating file");
+            println!(why);
+            panic!();
+        }
+    }
 
     let mut makepkg_command = match Command::new("makepkg")
                                             .arg("-sri")
@@ -208,12 +254,13 @@ pub async fn install(packages_to_install: Vec<PackageData>) -> Result<(), Box<dy
         
         // Where package data will be downloaded
         // /tmp/raytmp/builds/<package-name>/
-
-        let unpack_location = concat_string!(build_dir, "/", package_name);
+        let unpack_location = concat_string!(&build_dir, "/", &package_name);
+        let unpack_location = Path::new(unpack_location.as_str());
 
         // name of tar
         // /tmp/raytmp/builds/<package-name>/<package-name.tar.gz>
         let tar_name_path = concat_string!(build_dir, "/", package_name, ".tar.gz");
+        let tar_name_path = Path::new(tar_name_path.as_str());
         
         // get the AUR url
         let package_url = package_data.url_path.as_ref().unwrap();
@@ -238,7 +285,7 @@ pub async fn install(packages_to_install: Vec<PackageData>) -> Result<(), Box<dy
         match fs::remove_file(&tar_name_path) {
             Ok(_) => {},
             Err(why) => {
-                println!("Error while removing file: {}", tar_name_path);
+                println!("Error while removing file");
                 println!("{}", why);
             }
         }
