@@ -163,17 +163,17 @@ pub async fn wait_till_file_created(file_path: &Path) -> Result<(), Box<dyn Erro
     loop {
         // Receive for 2 seconds
         match receiver.recv_timeout(Duration::from_secs(2)) {
-            Ok(event) => {
+            Ok(_) => {
                 // Unwatch and return Ok
                 watcher.unwatch(file_dir)?;
-                Ok(())
+                return Ok(());
             },
             Err(why) => {
                 println!("Cannot watch for event");
                 println!("{}", why);
                 panic!();
             }
-        }
+        };
     }
 
 }
@@ -201,7 +201,7 @@ pub async fn unpack_file(tar_location: &Path, unpack_location: &Path) -> Result<
         Ok(_) => {},
         Err(why) => {
             println!("Error creating file");
-            println!(why);
+            println!("{}", why);
             panic!();
         }
     }
