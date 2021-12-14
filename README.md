@@ -1,4 +1,4 @@
 # RAY
 
 
-Ray is a rust based AUR helper
+Ray is a Rust based AUR helper

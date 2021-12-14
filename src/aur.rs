@@ -15,9 +15,6 @@ extern crate serde;
 
 
 // paths
-const PACMAN_BIN: &str = "/usr/bin/pacman";
-const MAKEPKG_BIN: &str = "/usr/bin/makepkg";
-const TAR_BIN: &str = "/usr/bin/tar";
 const RAY_TMP: &str = "/tmp/raytmp/";
 const BASE_URL: &str = "https://aur.archlinux.org";
 
@@ -146,20 +143,39 @@ pub async fn write_to_stdout(process:  &mut Child) {
 pub async fn unpack_file(tar_location: &String, unpack_location: &String) -> Result<(), Box<dyn Error>>{
     // Unpack file
 
-    let mut tar_command = Command::new("tar")
+    let mut tar_command = match Command::new("tar")
                                         .arg("-xvzf")
                                         .arg(tar_location)
                                         .arg("-C").arg("/tmp/raytmp/builds/")
                                         .stdout(Stdio::piped())
-                                        .spawn().unwrap();
+                                        .spawn()
+    {
+        Ok(Child) => {
+            Child
+        },
+        Err(why) => {
+            println!("Error while spawning tar process");
+            println!("{}", why);
+            panic!();
+        }
+    };
 
-    let mut makepkg_command = Command::new("makepkg")
+    let mut makepkg_command = match Command::new("makepkg")
                                             .arg("-sri")
                                             .arg("--noconfirm")
                                             .current_dir(unpack_location)
                                             .stdout(Stdio::piped())
                                             .spawn()
-                                            .unwrap();
+    {
+        Ok(Child) => {
+            Child
+        },
+        Err(why) => {
+            println!("Error while spawning makepkg process");
+            println!("{}", why);
+            panic!();
+        }
+    };
 
     write_to_stdout(&mut tar_command).await;
     write_to_stdout(&mut makepkg_command).await;
@@ -177,8 +193,8 @@ pub async fn install(packages_to_install: Vec<PackageData>) -> Result<(), Box<dy
         Ok(()) => {
 
         },
-        Err(_) => {
-            dbg!("Error creating file");
+        Err(why) => {
+            println!("{}", why);
             panic!();
         }
     }
@@ -219,7 +235,13 @@ pub async fn install(packages_to_install: Vec<PackageData>) -> Result<(), Box<dy
             }
         }
 
-        fs::remove_file(tar_name_path);
+        match fs::remove_file(&tar_name_path) {
+            Ok(_) => {},
+            Err(why) => {
+                println!("Error while removing file: {}", tar_name_path);
+                println!("{}", why);
+            }
+        }
 
     }
    
@@ -227,7 +249,7 @@ pub async fn install(packages_to_install: Vec<PackageData>) -> Result<(), Box<dy
 
 }
 
-fn create_directory(filepath: &String) ->std::io::Result<()>{
+fn create_directory(filepath: &String) -> std::io::Result<()> {
 
     if fs::metadata(&filepath).is_ok() {
         Ok(())
@@ -235,10 +257,17 @@ fn create_directory(filepath: &String) ->std::io::Result<()>{
     else {
         let path = Path::new(filepath.as_str());
 
-        fs::create_dir_all(path).expect("Could not create file");
-        let permissions = fs::Permissions::from_mode(0o755);
-        fs::set_permissions(path, permissions)?;
-        Ok(())
+        match fs::create_dir_all(path) {
+            Ok(_) => {
+                let permissions = fs::Permissions::from_mode(0o755);
+                fs::set_permissions(path, permissions)?;
+                Ok(())
+            },
+            Err(why) => {
+                Err(why)
+            }
+        }
+
     }
 
 }
